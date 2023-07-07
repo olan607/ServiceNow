@@ -1,0 +1,94 @@
+//If current record is a dictionary element, add all element dependencies
+	if (current.getTableName() == 'sys_dictionary'){
+		addFieldDependencies(current);
+		//If current record is a 'collection' (table), add all table dependencies
+		if (current.internal_type.name.toString() == 'collection')
+			addTableDependencies(current);
+	}
+	/*************************************/
+	/*** END SPECIAL RECORD HANDLING ***/
+	/*************************************/
+
+	//Display confirmation
+	var currentSet = new GlideRecord('sys_update_set');
+	currentSet.get(gs.getPreference('sys_update_set'));
+	gs.flushMessages(); //Flush to avoid multiples when list updating
+	gs.addInfoMessage('Record(s) added to update set ' + currentSet.name + '.');
+	action.setRedirectURL(url);
+}
+
+//Add attachments to the update set
+function addAttachments(record){
+	var updateManager = new GlideUpdateManager2();
+	var attach = new GlideRecord("sys_attachment");
+	attach.addQuery("table_sys_id", record.sys_id.toString());
+	attach.query();
+	while (attach.next()) {
+		//Process main sys_attachment record
+		updateManager.saveRecord(attach);
+		//Process sys_attachment_doc chunks
+		addAttachmentChunks(attach);
+	}
+}
+
+//Add attachment chunks to the update set
+function addAttachmentChunks(attachment){
+	var updateManager = new GlideUpdateManager2();
+	var attach_doc = new GlideRecord("sys_attachment_doc");
+	attach_doc.addQuery("sys_attachment", attachment.sys_id.toString());
+	attach_doc.orderBy("position");
+	attach_doc.query();
+	while (attach_doc.next())
+		updateManager.saveRecord(attach_doc);
+}
+
+//Add table dependencies to the update set
+function addTableDependencies(record){
+	var updateManager = new GlideUpdateManager2();
+	//Add table fields
+	var tableField = new GlideRecord("sys_dictionary");
+	tableField.addQuery("name", record.name.toString());
+	tableField.addQuery("element", "DOES NOT CONTAIN", "sys_");
+	tableField.addQuery("sys_id","!=",record.sys_id.toString()); //Don't re-add self
+	tableField.query();
+	while (tableField.next()) {
+		//Process table field
+		updateManager.saveRecord(tableField);
+		//Process table field dependencies
+		addFieldDependencies(tableField);
+	}
+	//Add default ui sections & elements
+	var uiSection = new GlideRecord("sys_ui_section");
+	uiSection.addQuery("name",record.name.toString());
+	uiSection.addQuery("view","Default view");
+	uiSection.query();
+	while (uiSection.next())
+		updateManager.saveRecord(uiSection);
+	//Add default form & elements
+	var formView = new GlideRecord("sys_ui_form");
+	formView.addQuery("name",record.name.toString());
+	formView.addQuery("view","Default view");
+	formView.query();
+	while (formView.next())
+		updateManager.saveRecord(formView);
+	//Add default list view
+	var listView = new GlideRecord("sys_ui_list");
+	listView.addQuery("name", record.name.toString());
+	listView.addQuery("view", "Default view");
+	listView.query();
+	while (listView.next())
+		//Process list view & elements
+		updateManager.saveRecord(listView);
+}
+
+//Add field dependencies to the update set
+function addFieldDependencies(record){
+	var updateManager = new GlideUpdateManager2();
+	//Add choices
+	var choice = new GlideRecord("sys_choice");
+	choice.addQuery("name", record.name.toString());
+	choice.addQuery("element", record.element.toString());
+	choice.query();
+	while (choice.next()) {
+		updateManager.saveRecord(choice);
+	}
